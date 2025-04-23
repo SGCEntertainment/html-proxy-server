@@ -1,30 +1,16 @@
 const express = require("express");
 const axios = require("axios");
-const http = require("http");
-const https = require("https");
 const app = express();
-
-// Конфигурация прокси (без аутентификации)
-const proxyConfig = {
-  host: '58.69.194.136',   // Замените на ваш внешний прокси сервер
-  port: 8081                // Порт прокси сервера
-};
-
-// Создаём агент для HTTP-прокси
-const httpAgent = new http.Agent({  
-  host: proxyConfig.host, 
-  port: proxyConfig.port 
-});
-
-// Создаём агент для HTTPS-прокси
-const httpsAgent = new https.Agent({
-  host: proxyConfig.host, 
-  port: proxyConfig.port
-});
 
 app.get("/proxy", async (req, res) => {
   const url = req.query.url;
   if (!url) return res.status(400).send("No URL");
+
+  // Конфигурация прокси (без аутентификации)
+  const proxyConfig = {
+    host: '58.69.194.136',   // Замените на ваш внешний прокси сервер
+    port: 8081                   // Порт прокси сервера
+  };
 
   try {
     // Запрос через прокси
@@ -36,11 +22,9 @@ app.get("/proxy", async (req, res) => {
         'Connection': 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
-      // Указание агентов для HTTP и HTTPS
-      httpAgent: httpAgent,
-      httpsAgent: httpsAgent
+      proxy: proxyConfig // Используем прокси-конфигурацию без аутентификации
     });
-
+    
     res.set("Content-Type", "text/html");
     res.send(response.data);
   } catch (err) {
