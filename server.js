@@ -15,42 +15,43 @@ app.get('/', async (req, res) => {
   };
 
   let visited = [];
+  let currentUrl = url;
+  let response;
 
   try {
-    let currentUrl = url;
-    let response;
-
     for (let i = 0; i < 10; i++) {
-      visited.push({ url: currentUrl });
-
       response = await axios.get(currentUrl, {
         headers,
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 400
       });
 
-      visited[visited.length - 1].status = response.status;
+      visited.push({
+        url: currentUrl,
+        status: response.status,
+        location: response.headers.location || null
+      });
 
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
-        const location = response.headers.location;
-        currentUrl = new URL(location, currentUrl).href;
+        currentUrl = new URL(response.headers.location, currentUrl).href;
       } else {
         break;
       }
     }
 
-    if (response.status === 200 && response.headers['content-type']?.includes("text/html")) {
-      res.set("Content-Type", "application/json");
-      res.send(JSON.stringify({
-        visited,
-        finalStatus: response.status,
-        html: response.data
-      }));
+    if (
+      response.headers['content-type'] &&
+      response.headers['content-type'].includes('text/html')
+    ) {
+      // Показываем HTML если он в ответе
+      res.set('Content-Type', 'text/html');
+      res.send(response.data);
     } else {
+      // Если не HTML, просто JSON с историей
       res.json({
         visited,
         finalStatus: response.status,
-        finalHeaders: response.headers
+        message: 'Final content is not HTML',
       });
     }
 
