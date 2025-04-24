@@ -3,8 +3,8 @@ const axios = require('axios');
 const app = express();
 
 app.get('/', async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send("No URL provided");
+  const startUrl = req.query.url;
+  if (!startUrl) return res.status(400).send("No URL provided");
 
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -14,46 +14,38 @@ app.get('/', async (req, res) => {
     'Connection': 'keep-alive'
   };
 
-  let visited = [];
-  let currentUrl = url;
-  let response;
+  const visited = [];
+  let currentUrl = startUrl;
+  let finalResponse = null;
 
   try {
     for (let i = 0; i < 10; i++) {
-      response = await axios.get(currentUrl, {
+      visited.push({ url: currentUrl });
+
+      const response = await axios.get(currentUrl, {
         headers,
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 400
       });
 
-      visited.push({
-        url: currentUrl,
-        status: response.status,
-        location: response.headers.location || null
-      });
+      visited[visited.length - 1].status = response.status;
 
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
         currentUrl = new URL(response.headers.location, currentUrl).href;
       } else {
+        // Успешный финальный ответ
+        finalResponse = response;
         break;
       }
     }
 
-    if (
-      response.headers['content-type'] &&
-      response.headers['content-type'].includes('text/html')
-    ) {
-      // Показываем HTML если он в ответе
-      res.set('Content-Type', 'text/html');
-      res.send(response.data);
-    } else {
-      // Если не HTML, просто JSON с историей
-      res.json({
-        visited,
-        finalStatus: response.status,
-        message: 'Final content is not HTML',
-      });
+    if (!finalResponse) {
+      throw new Error('Too many redirects or no final page reached');
     }
+
+    // Отдаём HTML
+    res.set("Content-Type", "text/html");
+    res.send(finalResponse.data);
 
   } catch (error) {
     res.status(500).json({
