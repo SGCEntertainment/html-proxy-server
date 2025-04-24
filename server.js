@@ -3,8 +3,8 @@ const axios = require('axios');
 const app = express();
 
 app.get('/', async (req, res) => {
-  const startUrl = req.query.url;
-  if (!startUrl) return res.status(400).send("No URL provided");
+  const url = req.query.url;
+  if (!url) return res.status(400).send("No URL provided");
 
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -14,15 +14,16 @@ app.get('/', async (req, res) => {
     'Connection': 'keep-alive'
   };
 
-  const visited = [];
-  let currentUrl = startUrl;
-  let finalResponse = null;
+  let visited = [];
 
   try {
+    let currentUrl = url;
+    let response;
+
     for (let i = 0; i < 10; i++) {
       visited.push({ url: currentUrl });
 
-      const response = await axios.get(currentUrl, {
+      response = await axios.get(currentUrl, {
         headers,
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 400
@@ -31,21 +32,27 @@ app.get('/', async (req, res) => {
       visited[visited.length - 1].status = response.status;
 
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
-        currentUrl = new URL(response.headers.location, currentUrl).href;
+        const location = response.headers.location;
+        currentUrl = new URL(location, currentUrl).href;
       } else {
-        // Успешный финальный ответ
-        finalResponse = response;
         break;
       }
     }
 
-    if (!finalResponse) {
-      throw new Error('Too many redirects or no final page reached');
+    if (response.status === 200 && response.headers['content-type']?.includes("text/html")) {
+      res.set("Content-Type", "application/json");
+      res.send(JSON.stringify({
+        visited,
+        finalStatus: response.status,
+        html: response.data
+      }));
+    } else {
+      res.json({
+        visited,
+        finalStatus: response.status,
+        finalHeaders: response.headers
+      });
     }
-
-    // Отдаём HTML
-    res.set("Content-Type", "text/html");
-    res.send(finalResponse.data);
 
   } catch (error) {
     res.status(500).json({
