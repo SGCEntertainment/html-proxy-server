@@ -14,51 +14,39 @@ app.get('/', async (req, res) => {
     'Connection': 'keep-alive'
   };
 
-  let visited = [];
-
   try {
     let currentUrl = url;
     let response;
 
+    // Ручной редирект
     for (let i = 0; i < 10; i++) {
-      visited.push({ url: currentUrl });
-
       response = await axios.get(currentUrl, {
         headers,
         maxRedirects: 0,
         validateStatus: status => status >= 200 && status < 400
       });
 
-      visited[visited.length - 1].status = response.status;
-
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
         const location = response.headers.location;
         currentUrl = new URL(location, currentUrl).href;
-      } else {
+      } else if (response.status === 200) {
+        // Получили успешный финальный URL
         break;
       }
     }
 
-    if (response.status === 200 && response.headers['content-type']?.includes("text/html")) {
-      res.set("Content-Type", "application/json");
-      res.send(JSON.stringify({
-        visited,
-        finalStatus: response.status,
-        html: response.data
-      }));
-    } else {
-      res.json({
-        visited,
-        finalStatus: response.status,
-        finalHeaders: response.headers
-      });
-    }
+    // Загружаем финальный URL с разрешёнными редиректами
+    const finalResponse = await axios.get(currentUrl, {
+      headers,
+      maxRedirects: 5, // на всякий случай
+      responseType: 'text'
+    });
+
+    res.set("Content-Type", finalResponse.headers['content-type'] || "text/html");
+    res.send(finalResponse.data);
 
   } catch (error) {
-    res.status(500).json({
-      error: error.message,
-      visited
-    });
+    res.status(500).send("Error: " + error.message);
   }
 });
 
