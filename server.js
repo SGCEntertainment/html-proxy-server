@@ -7,25 +7,31 @@ app.get('/', async (req, res) => {
   if (!url) return res.status(400).send("No URL provided");
 
   const headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    'Accept': 'text/html',
+    'Referer': 'https://google.com/',
+    'Origin': 'https://google.com',
+    'Connection': 'keep-alive'
   };
 
-  let visitedUrls = [];
-  let currentUrl = url;
-  let response;
+  let visited = [];
 
   try {
+    let currentUrl = url;
+    let response;
+
     for (let i = 0; i < 10; i++) {
-      visitedUrls.push(currentUrl);
+      visited.push({ url: currentUrl });
 
       response = await axios.get(currentUrl, {
         headers,
         maxRedirects: 0,
-        validateStatus: status => status >= 200 && status < 400 // включаем 3xx
+        validateStatus: status => status >= 200 && status < 400
       });
 
+      visited[visited.length - 1].status = response.status;
+
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
-        // Обрабатываем абсолютный и относительный редирект
         const location = response.headers.location;
         currentUrl = new URL(location, currentUrl).href;
       } else {
@@ -33,15 +39,25 @@ app.get('/', async (req, res) => {
       }
     }
 
-    res.json({
-      visitedUrls,
-      finalStatus: response.status
-    });
+    if (response.status === 200 && response.headers['content-type']?.includes("text/html")) {
+      res.set("Content-Type", "application/json");
+      res.send(JSON.stringify({
+        visited,
+        finalStatus: response.status,
+        html: response.data
+      }));
+    } else {
+      res.json({
+        visited,
+        finalStatus: response.status,
+        finalHeaders: response.headers
+      });
+    }
 
   } catch (error) {
     res.status(500).json({
       error: error.message,
-      visitedUrls
+      visited
     });
   }
 });
